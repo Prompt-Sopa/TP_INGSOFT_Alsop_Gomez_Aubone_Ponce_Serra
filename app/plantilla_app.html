@@ -1,0 +1,427 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Monitor de Fuga</title>
+<style>
+  :root {
+    --bg: #f4f6fa; --card: #ffffff; --text: #1d2433; --muted: #667085; --line: #e4e7ee;
+    --azul: #4C72B0; --naranja: #DD8452; --rojo: #c8423b; --amarillo: #d99a1e; --verde: #3b8a5a;
+    --sombra: 0 1px 3px rgba(16, 24, 40, .08);
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: "Segoe UI", system-ui, -apple-system, Roboto, sans-serif; background: var(--bg); color: var(--text); font-size: 15px; }
+  header { background: #1f3b63; color: #fff; padding: 16px 24px; }
+  header .fila { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 8px; max-width: 1200px; margin: 0 auto; }
+  header h1 { margin: 0; font-size: 21px; }
+  header p { margin: 2px 0 0; opacity: .8; font-size: 13px; }
+  header .chip { background: rgba(255,255,255,.14); border-radius: 999px; padding: 5px 12px; font-size: 12.5px; }
+  nav { background: #fff; border-bottom: 1px solid var(--line); position: sticky; top: 0; z-index: 5; }
+  nav .fila { max-width: 1200px; margin: 0 auto; display: flex; overflow-x: auto; }
+  nav a { padding: 13px 18px; color: var(--muted); text-decoration: none; font-weight: 600; border-bottom: 3px solid transparent; white-space: nowrap; }
+  nav a.activo { color: #1f3b63; border-bottom-color: var(--naranja); }
+  main { max-width: 1200px; margin: 0 auto; padding: 20px 16px 40px; }
+  .vista { display: none; }
+  .vista.activa { display: block; }
+  .grid { display: grid; gap: 16px; }
+  .kpis { grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); margin-bottom: 16px; }
+  .dos { grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); }
+  .tres { grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 16px 18px; box-shadow: var(--sombra); min-width: 0; }
+  .card h2 { font-size: 15.5px; margin: 0 0 4px; }
+  .card .sub { color: var(--muted); font-size: 12.5px; margin: 0 0 12px; }
+  .kpi .valor { font-size: 28px; font-weight: 700; margin-top: 4px; }
+  .kpi .etq { color: var(--muted); font-size: 13px; }
+  .kpi .nota { color: var(--muted); font-size: 12px; margin-top: 2px; }
+  .barra { display: grid; grid-template-columns: 170px 1fr 52px; align-items: center; gap: 8px; margin: 7px 0; font-size: 13.5px; }
+  .barra .pista { background: #eef1f6; border-radius: 6px; height: 14px; overflow: hidden; }
+  .barra .relleno { height: 100%; border-radius: 6px; }
+  .barra .num { text-align: right; font-variant-numeric: tabular-nums; }
+  .matriz { display: grid; grid-template-columns: 110px 1fr 1fr; gap: 6px; font-size: 13px; }
+  .matriz div { padding: 10px 8px; border-radius: 8px; text-align: center; }
+  .matriz .cab { color: var(--muted); font-weight: 600; background: none; }
+  .matriz .celda strong { display: block; font-size: 22px; }
+  .ok { background: #e3f1e8; color: #1f5c37; }
+  .mal { background: #fbe7e5; color: #8a2a24; }
+  label { display: block; font-size: 13px; font-weight: 600; margin: 12px 0 5px; }
+  label span { float: right; font-weight: 700; color: #1f3b63; }
+  input[type=range] { width: 100%; accent-color: #1f3b63; }
+  select, input[type=search] { width: 100%; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; font: inherit; background: #fff; }
+  .checks { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 12px; margin-top: 12px; }
+  .checks label { font-weight: 500; margin: 0; display: flex; gap: 6px; align-items: center; }
+  .medidor { height: 18px; background: linear-gradient(90deg, var(--verde) 0 50%, var(--amarillo) 50% 75%, var(--rojo) 75% 100%); border-radius: 9px; position: relative; margin: 14px 0 4px; }
+  .medidor .aguja { position: absolute; top: -6px; width: 4px; height: 30px; background: var(--text); border-radius: 2px; transform: translateX(-2px); transition: left .25s; }
+  .escala { position: relative; height: 16px; color: var(--muted); font-size: 11.5px; }
+  .escala span { position: absolute; transform: translateX(-50%); white-space: nowrap; }
+  .escala span:first-child { transform: none; }
+  .escala span:last-child { transform: translateX(-100%); }
+  .score { font-size: 46px; font-weight: 800; line-height: 1; }
+  .nivel { display: inline-block; padding: 4px 12px; border-radius: 999px; font-weight: 700; font-size: 13px; color: #fff; }
+  .nivel.Alto { background: var(--rojo); } .nivel.Medio { background: var(--amarillo); } .nivel.Bajo { background: var(--verde); }
+  ul.factores { list-style: none; padding: 0; margin: 0; }
+  ul.factores li { display: flex; justify-content: space-between; gap: 8px; padding: 6px 0; border-bottom: 1px dashed var(--line); font-size: 13.5px; }
+  .sube { color: var(--rojo); font-weight: 700; } .baja { color: var(--verde); font-weight: 700; }
+  .accion { border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; margin-bottom: 8px; display: flex; justify-content: space-between; gap: 10px; align-items: center; }
+  .accion small { color: var(--muted); display: block; }
+  button { font: inherit; border: 0; border-radius: 8px; padding: 7px 12px; cursor: pointer; background: #1f3b63; color: #fff; font-weight: 600; font-size: 13px; }
+  button.sec { background: #eef1f6; color: #1f3b63; }
+  .presets { display: flex; gap: 6px; flex-wrap: wrap; }
+  .filtros { display: grid; grid-template-columns: 2fr 1fr 1fr; gap: 10px; margin-bottom: 12px; }
+  .tabla { overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+  th, td { padding: 9px 8px; border-bottom: 1px solid var(--line); text-align: left; white-space: nowrap; }
+  th { color: var(--muted); font-weight: 600; font-size: 12.5px; background: #fafbfd; position: sticky; top: 0; }
+  td.n { text-align: right; font-variant-numeric: tabular-nums; }
+  .mini { display: inline-block; width: 60px; height: 8px; background: #eef1f6; border-radius: 4px; vertical-align: middle; margin-right: 6px; overflow: hidden; }
+  .mini i { display: block; height: 100%; }
+  .pie { color: var(--muted); font-size: 12px; text-align: center; margin-top: 24px; }
+  .aviso { background: #fff7e6; border: 1px solid #f3d9a4; color: #7a5a12; border-radius: 10px; padding: 10px 12px; font-size: 13px; margin-bottom: 16px; }
+  @media (max-width: 640px) {
+    .barra { grid-template-columns: 110px 1fr 44px; font-size: 12.5px; }
+    .filtros { grid-template-columns: 1fr; }
+    .dos, .tres { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+<header>
+  <div class="fila">
+    <div>
+      <h1>Monitor de Fuga de Clientes</h1>
+      <p>Sistema de alerta temprana de bajas · CRISP-DM · Ingeniería del Software (UGR) · Grupo 14</p>
+    </div>
+    <div class="chip" id="chip-modelo"></div>
+  </div>
+</header>
+<nav>
+  <div class="fila">
+    <a href="#resumen" data-vista="resumen">1. Tablero</a>
+    <a href="#simulador" data-vista="simulador">2. Simulador de riesgo</a>
+    <a href="#bandeja" data-vista="bandeja">3. Bandeja de retención</a>
+  </div>
+</nav>
+
+<main>
+  <!-- ======================= VISTA 1: TABLERO ======================= -->
+  <section class="vista" id="vista-resumen">
+    <div class="grid kpis" id="kpis"></div>
+    <div class="grid tres">
+      <div class="card"><h2>Fuga por tipo de contrato</h2><p class="sub">% de clientes que se dieron de baja</p><div id="g-contrato"></div></div>
+      <div class="card"><h2>Fuga por tipo de internet</h2><p class="sub">% de clientes que se dieron de baja</p><div id="g-internet"></div></div>
+      <div class="card"><h2>Fuga por método de pago</h2><p class="sub">% de clientes que se dieron de baja</p><div id="g-pago"></div></div>
+    </div>
+    <div class="grid dos" style="margin-top:16px">
+      <div class="card">
+        <h2>¿Qué mueve el riesgo de fuga?</h2>
+        <p class="sub">Odds ratio del modelo: &gt; 1 aumenta el riesgo, &lt; 1 lo reduce</p>
+        <div id="g-factores"></div>
+      </div>
+      <div class="card">
+        <h2>Matriz de confusión (datos de prueba)</h2>
+        <p class="sub" id="sub-matriz"></p>
+        <div class="matriz" id="matriz"></div>
+        <p class="sub" style="margin-top:12px" id="lectura-matriz"></p>
+        <h2 style="margin-top:14px">Comparación de modelos</h2>
+        <div class="tabla"><table id="tabla-modelos"></table></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ======================= VISTA 2: SIMULADOR ======================= -->
+  <section class="vista" id="vista-simulador">
+    <div class="grid dos">
+      <div class="card">
+        <h2>Datos del cliente</h2>
+        <p class="sub" id="sim-origen">Modificá las variables y el riesgo se recalcula al instante.</p>
+        <div class="presets" id="presets"></div>
+        <label>Antigüedad <span id="v-antiguedad"></span></label>
+        <input type="range" id="antiguedad_meses" min="0" max="72" step="1">
+        <label>Cargo mensual <span id="v-cargo"></span></label>
+        <input type="range" id="cargo_mensual" min="18" max="119" step="0.5">
+        <label>Tipo de contrato</label><select id="tipo_contrato"></select>
+        <label>Tipo de internet</label><select id="tipo_internet"></select>
+        <label>Método de pago</label><select id="metodo_pago"></select>
+        <div class="checks">
+          <label><input type="checkbox" id="seguridad_online"> Seguridad online</label>
+          <label><input type="checkbox" id="soporte_tecnico"> Soporte técnico</label>
+          <label><input type="checkbox" id="factura_digital"> Factura digital</label>
+          <label><input type="checkbox" id="tiene_dependientes"> Tiene dependientes</label>
+          <label><input type="checkbox" id="tiene_pareja"> Tiene pareja</label>
+          <label><input type="checkbox" id="adulto_mayor"> Adulto mayor (65+)</label>
+        </div>
+      </div>
+      <div class="grid" style="align-content:start">
+        <div class="card">
+          <h2>Riesgo de fuga</h2>
+          <p class="sub">Puntaje del modelo de regresión logística (alerta a partir de 50 %)</p>
+          <div style="display:flex; align-items:center; gap:16px; flex-wrap:wrap">
+            <div class="score" id="score"></div>
+            <div><span class="nivel" id="nivel"></span><div class="sub" id="nivel-texto" style="margin:6px 0 0"></div></div>
+          </div>
+          <div class="medidor"><div class="aguja" id="aguja"></div></div>
+          <div class="escala"><span style="left:0">0 %</span><span style="left:25%">Bajo</span><span style="left:50%">50 %</span><span style="left:62.5%">Medio</span><span style="left:75%">75 %</span><span style="left:87.5%">Alto</span><span style="left:100%">100 %</span></div>
+        </div>
+        <div class="card">
+          <h2>Factores de este cliente</h2>
+          <p class="sub">Comparado con un cliente promedio de referencia</p>
+          <ul class="factores" id="factores"></ul>
+        </div>
+        <div class="card">
+          <h2>Acciones sugeridas</h2>
+          <p class="sub">Cuánto bajaría el riesgo si se aplica cada acción</p>
+          <div id="acciones"></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ======================= VISTA 3: BANDEJA ======================= -->
+  <section class="vista" id="vista-bandeja">
+    <div class="aviso">Clientes del conjunto de prueba (no usados para entrenar), ordenados por riesgo. La columna <b>Resultado real</b> muestra si el cliente efectivamente se fue, para validar el modelo.</div>
+    <div class="grid kpis" id="kpis-bandeja"></div>
+    <div class="card">
+      <div class="filtros">
+        <input type="search" id="buscar" placeholder="Buscar por ID de cliente…">
+        <select id="f-nivel"><option value="">Todos los niveles</option><option>Alto</option><option>Medio</option><option>Bajo</option></select>
+        <select id="f-contrato"><option value="">Todos los contratos</option></select>
+      </div>
+      <div class="tabla">
+        <table>
+          <thead><tr><th>#</th><th>ID cliente</th><th>Riesgo</th><th>Nivel</th><th>Contrato</th><th>Internet</th><th>Pago</th><th class="n">Antigüedad</th><th class="n">Cargo</th><th>Resultado real</th><th></th></tr></thead>
+          <tbody id="filas"></tbody>
+        </table>
+      </div>
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-top:12px; flex-wrap:wrap; gap:8px">
+        <span class="sub" id="contador" style="margin:0"></span>
+        <button class="sec" id="mas">Mostrar más</button>
+      </div>
+    </div>
+  </section>
+
+  <p class="pie" id="pie"></p>
+</main>
+
+<script>
+const M = /*__MODELO__*/null;
+
+const pct = (x, d = 1) => (x * 100).toLocaleString("es-AR", { minimumFractionDigits: d, maximumFractionDigits: d }) + " %";
+const num = (x, d = 0) => x.toLocaleString("es-AR", { minimumFractionDigits: d, maximumFractionDigits: d });
+const usd = x => "USD " + num(x, 2);
+const $ = id => document.getElementById(id);
+const BINARIAS = ["factura_digital", "seguridad_online", "soporte_tecnico", "tiene_dependientes", "adulto_mayor", "tiene_pareja"];
+const ETIQUETAS = {
+  antiguedad_meses: "Antigüedad", cargo_mensual: "Cargo mensual",
+  "tipo_contrato_Un año": "Contrato de un año", "tipo_contrato_Dos años": "Contrato de dos años",
+  "tipo_internet_Fibra óptica": "Internet por fibra óptica", "tipo_internet_Sin internet": "Sin servicio de internet",
+  "metodo_pago_Cheque electrónico": "Paga con cheque electrónico", "metodo_pago_Cheque por correo": "Paga con cheque por correo",
+  "metodo_pago_Tarjeta de crédito (automática)": "Paga con tarjeta (automático)",
+  "factura_digital_Sí": "Factura digital", "seguridad_online_Sí": "Tiene seguridad online", "soporte_tecnico_Sí": "Tiene soporte técnico",
+  "tiene_dependientes_Sí": "Tiene dependientes", "adulto_mayor_Sí": "Adulto mayor", "tiene_pareja_Sí": "Tiene pareja",
+};
+
+// ---------- Modelo: la misma fórmula que la regresión logística entrenada en la notebook ----------
+function contribuciones(c) {
+  const out = {};
+  for (const v of Object.keys(M.escalado)) {
+    const e = M.escalado[v];
+    out[v] = M.coeficientes[v] * (c[v] - e.media) / e.desvio;
+  }
+  for (const v of Object.keys(M.categorias)) {
+    const k = v + "_" + c[v];
+    if (k in M.coeficientes) out[k] = M.coeficientes[k];
+  }
+  return out;
+}
+function riesgo(c) {
+  const z = M.intercepto + Object.values(contribuciones(c)).reduce((a, b) => a + b, 0);
+  return 1 / (1 + Math.exp(-z));
+}
+const nivel = p => p >= 0.75 ? "Alto" : p >= M.umbral ? "Medio" : "Bajo";
+
+// ---------- Navegación ----------
+function mostrar(vista) {
+  if (!["resumen", "simulador", "bandeja"].includes(vista)) vista = "resumen";
+  document.querySelectorAll(".vista").forEach(s => s.classList.toggle("activa", s.id === "vista-" + vista));
+  document.querySelectorAll("nav a").forEach(a => a.classList.toggle("activo", a.dataset.vista === vista));
+  window.scrollTo(0, 0);
+}
+window.addEventListener("hashchange", () => mostrar(location.hash.slice(1)));
+
+function barras(cont, datos, color, max) {
+  cont.innerHTML = datos.map(([etq, v]) => `
+    <div class="barra"><span>${etq}</span>
+      <div class="pista"><div class="relleno" style="width:${v / max * 100}%; background:${color}"></div></div>
+      <span class="num">${pct(v, 0)}</span></div>`).join("");
+}
+
+// ---------- Vista 1 ----------
+function vistaResumen() {
+  const lr = M.metricas["Regresión Logística"], r = M.resumen;
+  const kpi = (etq, valor, nota) => `<div class="card kpi"><div class="etq">${etq}</div><div class="valor">${valor}</div><div class="nota">${nota}</div></div>`;
+  $("kpis").innerHTML =
+    kpi("Clientes analizados", num(r.clientes), "Dataset Telco Customer Churn (IBM)") +
+    kpi("Tasa de fuga", pct(r.tasa_fuga), "Clientes que se dieron de baja") +
+    kpi("Recall del modelo", pct(lr.Recall), "Fugas detectadas en datos de prueba") +
+    kpi("ROC-AUC", num(lr["ROC-AUC"], 3), "Capacidad de ordenar por riesgo") +
+    kpi("Precision", pct(lr.Precision), "Alertas que son fugas reales");
+
+  const orden = (obj, claves) => claves.map(k => [k, obj[k]]);
+  barras($("g-contrato"), orden(r.fuga_por_contrato, M.categorias.tipo_contrato), "var(--naranja)", 0.6);
+  barras($("g-internet"), orden(r.fuga_por_internet, M.categorias.tipo_internet), "var(--naranja)", 0.6);
+  barras($("g-pago"), Object.entries(r.fuga_por_pago).sort((a, b) => b[1] - a[1]).map(([k, v]) => [k.replace(" (automática)", " (aut.)"), v]), "var(--naranja)", 0.6);
+
+  const odds = Object.entries(M.coeficientes).map(([k, c]) => [k, Math.exp(c)]).sort((a, b) => b[1] - a[1]);
+  $("g-factores").innerHTML = odds.map(([k, o]) => {
+    const ancho = Math.min(Math.abs(Math.log(o)) / Math.log(4) * 50, 50);
+    const izq = o >= 1 ? 50 : 50 - ancho;
+    return `<div class="barra"><span>${ETIQUETAS[k] || k}</span>
+      <div class="pista" style="position:relative"><div style="position:absolute; left:50%; top:0; bottom:0; width:1px; background:#98a2b3"></div>
+      <div class="relleno" style="position:absolute; left:${izq}%; width:${ancho}%; background:${o >= 1 ? "var(--naranja)" : "var(--azul)"}"></div></div>
+      <span class="num">× ${num(o, 2)}</span></div>`;
+  }).join("");
+
+  const [[vn, fp], [fn, vp]] = M.matriz_confusion;
+  $("sub-matriz").textContent = `Regresión logística · ${num(M.resumen.clientes_test)} clientes de prueba`;
+  $("matriz").innerHTML = `
+    <div class="cab"></div><div class="cab">Predice: se queda</div><div class="cab">Predice: se va</div>
+    <div class="cab">Real: se queda</div><div class="celda ok"><strong>${vn}</strong>Verdaderos negativos</div><div class="celda mal"><strong>${fp}</strong>Falsas alarmas</div>
+    <div class="cab">Real: se va</div><div class="celda mal"><strong>${fn}</strong>Fugas no detectadas</div><div class="celda ok"><strong>${vp}</strong>Fugas detectadas</div>`;
+  $("lectura-matriz").innerHTML = `De ${vp + fn} clientes que se fueron, el modelo detectó <b>${vp}</b> (${pct(vp / (vp + fn), 0)}). Por cada fuga detectada hay ${num(fp / vp, 1)} falsa alarma, que solo cuesta un contacto de fidelización.`;
+
+  const filas = Object.entries(M.metricas).map(([n, m]) =>
+    `<tr><td>${n === "Regresión Logística" ? "<b>" + n + " ✓</b>" : n}</td><td class="n">${pct(m.Accuracy)}</td><td class="n">${pct(m.Recall)}</td><td class="n">${pct(m.Precision)}</td><td class="n">${num(m["ROC-AUC"], 3)}</td></tr>`).join("");
+  $("tabla-modelos").innerHTML = `<thead><tr><th>Modelo</th><th class="n">Accuracy</th><th class="n">Recall</th><th class="n">Precision</th><th class="n">AUC</th></tr></thead><tbody>${filas}</tbody>`;
+}
+
+// ---------- Vista 2 ----------
+let cliente = {};
+function llenarSelect(id, opciones) { $(id).innerHTML = opciones.map(o => `<option>${o}</option>`).join(""); }
+function cargarCliente(c, origen) {
+  cliente = { ...c };
+  $("antiguedad_meses").value = c.antiguedad_meses;
+  $("cargo_mensual").value = c.cargo_mensual;
+  for (const v of ["tipo_contrato", "tipo_internet", "metodo_pago"]) $(v).value = c[v];
+  for (const v of BINARIAS) $(v).checked = c[v] === "Sí";
+  $("sim-origen").textContent = origen;
+  recalcular();
+}
+function leerFormulario() {
+  cliente.antiguedad_meses = +$("antiguedad_meses").value;
+  cliente.cargo_mensual = +$("cargo_mensual").value;
+  for (const v of ["tipo_contrato", "tipo_internet", "metodo_pago"]) cliente[v] = $(v).value;
+  for (const v of BINARIAS) cliente[v] = $(v).checked ? "Sí" : "No";
+  if (cliente.tipo_internet === "Sin internet") {  // sin internet no hay servicios de internet
+    cliente.seguridad_online = cliente.soporte_tecnico = "No";
+    $("seguridad_online").checked = $("soporte_tecnico").checked = false;
+  }
+  $("seguridad_online").disabled = $("soporte_tecnico").disabled = cliente.tipo_internet === "Sin internet";
+}
+function recalcular() {
+  leerFormulario();
+  const p = riesgo(cliente), n = nivel(p);
+  $("v-antiguedad").textContent = cliente.antiguedad_meses + " meses";
+  $("v-cargo").textContent = usd(cliente.cargo_mensual);
+  $("score").textContent = pct(p, 0);
+  $("nivel").textContent = "Riesgo " + n;
+  $("nivel").className = "nivel " + n;
+  $("nivel-texto").textContent = { Alto: "Contactar esta semana", Medio: "Incluir en campaña de retención", Bajo: "Sin acción inmediata" }[n];
+  $("aguja").style.left = (p * 100) + "%";
+
+  const contrib = Object.entries(contribuciones(cliente)).filter(([, v]) => Math.abs(v) > 0.15).sort((a, b) => Math.abs(b[1]) - Math.abs(a[1])).slice(0, 6);
+  $("factores").innerHTML = contrib.map(([k, v]) => {
+    let etq = ETIQUETAS[k] || k;
+    if (k === "antiguedad_meses") etq += v > 0 ? " baja (" + cliente.antiguedad_meses + " meses)" : " alta (" + cliente.antiguedad_meses + " meses)";
+    if (k === "cargo_mensual") etq += v > 0 ? " alto (" + usd(cliente.cargo_mensual) + ")" : " bajo (" + usd(cliente.cargo_mensual) + ")";
+    return `<li><span>${etq}</span><span class="${v > 0 ? "sube" : "baja"}">${v > 0 ? "▲ aumenta" : "▼ reduce"}</span></li>`;
+  }).join("") || "<li>Perfil cercano al promedio</li>";
+
+  const acciones = [];
+  const probar = (titulo, detalle, cambio) => {
+    const nuevo = riesgo({ ...cliente, ...cambio });
+    if (p - nuevo > 0.01) acciones.push({ titulo, detalle, nuevo, cambio });
+  };
+  if (cliente.tipo_contrato === "Mes a mes") probar("Ofrecer pasar a contrato de un año", "Con descuento por permanencia", { tipo_contrato: "Un año" });
+  if (["Cheque electrónico", "Cheque por correo"].includes(cliente.metodo_pago)) probar("Incentivar el débito automático", "Bonificación por adherirse", { metodo_pago: "Transferencia (automática)" });
+  if (cliente.tipo_internet !== "Sin internet" && cliente.soporte_tecnico === "No") probar("Regalar soporte técnico por 3 meses", "Servicio de valor agregado", { soporte_tecnico: "Sí" });
+  if (cliente.tipo_internet !== "Sin internet" && cliente.seguridad_online === "No") probar("Ofrecer seguridad online de prueba", "Servicio de valor agregado", { seguridad_online: "Sí" });
+  if (cliente.cargo_mensual > 80) probar("Revisar el plan y bajar el cargo 15 %", "Ajustar el plan a su uso real", { cargo_mensual: Math.round(cliente.cargo_mensual * 0.85) });
+  acciones.sort((a, b) => a.nuevo - b.nuevo);
+  if (acciones.length > 1) {
+    const todo = Object.assign({}, ...acciones.map(a => a.cambio));
+    acciones.push({ titulo: "Combinar todas las acciones", detalle: "Paquete de retención completo", nuevo: riesgo({ ...cliente, ...todo }), cambio: todo });
+  }
+  let html = acciones.map((a, i) => `<div class="accion"><div><b>${a.titulo}</b><small>${a.detalle}</small></div>
+    <div style="text-align:right; white-space:nowrap"><span class="sube">${pct(p, 0)}</span> → <span class="baja">${pct(a.nuevo, 0)}</span><br>
+    <button class="sec" data-accion="${i}" style="margin-top:4px">Aplicar</button></div></div>`).join("");
+  if (cliente.antiguedad_meses < 12) html += `<div class="accion"><div><b>Llamado de seguimiento (cliente nuevo)</b><small>Los primeros 12 meses son los de mayor riesgo</small></div></div>`;
+  $("acciones").innerHTML = html || `<p class="sub">No hay acciones que reduzcan el riesgo de forma relevante.</p>`;
+  $("acciones").querySelectorAll("button[data-accion]").forEach(b => b.onclick = () => {
+    cargarCliente({ ...cliente, ...acciones[+b.dataset.accion].cambio }, "Simulación: acción aplicada sobre el cliente anterior.");
+  });
+}
+function vistaSimulador() {
+  for (const v of ["tipo_contrato", "tipo_internet", "metodo_pago"]) llenarSelect(v, M.categorias[v]);
+  document.querySelectorAll("#vista-simulador input, #vista-simulador select").forEach(el => el.addEventListener("input", recalcular));
+  const alto = M.bandeja.find(c => c.score < 0.8 && c.real === 1);
+  const medio = M.bandeja.find(c => c.score < 0.65 && c.real === 1);
+  const bajo = M.bandeja.find(c => c.score < 0.1 && c.real === 0);
+  const presets = [["Cliente de riesgo alto", alto], ["Riesgo medio", medio], ["Cliente fiel", bajo]].filter(p => p[1]);
+  $("presets").innerHTML = presets.map((p, i) => `<button class="sec" data-p="${i}">${p[0]}</button>`).join("");
+  $("presets").querySelectorAll("button").forEach(b => b.onclick = () => {
+    const c = presets[+b.dataset.p][1];
+    cargarCliente(c, `Cliente real ${c.id} (conjunto de prueba). Modificá las variables para simular.`);
+  });
+  cargarCliente(alto, `Cliente real ${alto.id} (conjunto de prueba). Modificá las variables para simular.`);
+}
+
+// ---------- Vista 3 ----------
+let visibles = 25;
+function vistaBandeja() {
+  const b = M.bandeja;
+  const cuenta = n => b.filter(c => nivel(c.score) === n).length;
+  const kpi = (etq, valor, nota) => `<div class="card kpi"><div class="etq">${etq}</div><div class="valor">${valor}</div><div class="nota">${nota}</div></div>`;
+  const alertados = b.filter(c => c.score >= M.umbral);
+  const ingreso = alertados.reduce((s, c) => s + c.cargo_mensual, 0);
+  $("kpis-bandeja").innerHTML =
+    kpi("Riesgo alto", num(cuenta("Alto")), "Contactar esta semana") +
+    kpi("Riesgo medio", num(cuenta("Medio")), "Campaña de retención") +
+    kpi("Riesgo bajo", num(cuenta("Bajo")), "Sin acción inmediata") +
+    kpi("Facturación mensual en riesgo", usd(ingreso), "Suma del cargo de los clientes en alerta");
+  M.categorias.tipo_contrato.forEach(c => $("f-contrato").insertAdjacentHTML("beforeend", `<option>${c}</option>`));
+  ["buscar", "f-nivel", "f-contrato"].forEach(id => $(id).addEventListener("input", () => { visibles = 25; pintarBandeja(); }));
+  $("mas").onclick = () => { visibles += 25; pintarBandeja(); };
+  pintarBandeja();
+}
+function pintarBandeja() {
+  const q = $("buscar").value.trim().toUpperCase(), fn = $("f-nivel").value, fc = $("f-contrato").value;
+  const lista = M.bandeja.filter(c => (!q || c.id.toUpperCase().includes(q)) && (!fn || nivel(c.score) === fn) && (!fc || c.tipo_contrato === fc));
+  const color = { Alto: "var(--rojo)", Medio: "var(--amarillo)", Bajo: "var(--verde)" };
+  $("filas").innerHTML = lista.slice(0, visibles).map((c, i) => {
+    const n = nivel(c.score);
+    return `<tr><td>${i + 1}</td><td><b>${c.id}</b></td>
+      <td><span class="mini"><i style="width:${c.score * 100}%; background:${color[n]}"></i></span>${pct(c.score, 0)}</td>
+      <td><span class="nivel ${n}">${n}</span></td><td>${c.tipo_contrato}</td><td>${c.tipo_internet}</td><td>${c.metodo_pago}</td>
+      <td class="n">${c.antiguedad_meses} m</td><td class="n">${usd(c.cargo_mensual)}</td>
+      <td>${c.real === 1 ? '<span class="sube">Se fue</span>' : '<span class="baja">Sigue</span>'}</td>
+      <td><button class="sec" data-id="${c.id}">Simular</button></td></tr>`;
+  }).join("");
+  $("contador").textContent = `Mostrando ${Math.min(visibles, lista.length)} de ${lista.length} clientes`;
+  $("mas").style.display = visibles < lista.length ? "" : "none";
+  $("filas").querySelectorAll("button[data-id]").forEach(btn => btn.onclick = () => {
+    const c = M.bandeja.find(x => x.id === btn.dataset.id);
+    cargarCliente(c, `Cliente real ${c.id} (desde la bandeja). Modificá las variables para simular.`);
+    location.hash = "simulador";
+  });
+}
+
+// ---------- Inicio ----------
+$("chip-modelo").textContent = `Modelo: Regresión logística v${M.version} · AUC ${num(M.metricas["Regresión Logística"]["ROC-AUC"], 3)}`;
+$("pie").textContent = `Modelo entrenado el ${M.fecha_entrenamiento} con el dataset Telco Customer Churn (IBM). Los coeficientes provienen de la notebook del TP (Fase 6). No se muestran datos personales: solo IDs anónimos. Grupo 14: Agustín Alsop, Marcos Gomez Hollger, Alexia Aubone, Germán Ponce y Agustin Serra Rivero.`;
+vistaResumen();
+vistaSimulador();
+vistaBandeja();
+mostrar(location.hash.slice(1));
+</script>
+</body>
+</html>
